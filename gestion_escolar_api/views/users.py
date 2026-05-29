@@ -109,3 +109,45 @@ class AdminView(generics.CreateAPIView):
         admin.save()
 
         return Response({"message": "Administrador actualizado correctamente"}, status=status.HTTP_200_OK)
+    
+    #Función para eliminar un administrador específico por su ID
+    @transaction.atomic
+    def delete(self, request, *args, **kwargs):
+        admin = Administradores.objects.filter(id=request.GET.get("id"), user__is_active=1).first()
+        if not admin:
+            return Response({"message": "Administrador no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            admin.user.delete()
+            return Response({"details":"Administrador eliminado"},200)
+        except Exception as e:
+            return Response({"details":"Error al eliminar administrador"},400)
+        
+    #Función para desactivar un administrador específico por su ID
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        admin = Administradores.objects.filter(id=request.data["id"], user__is_active=1).first()
+        if not admin:
+            return Response({"message": "Administrador no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            admin.user.is_active = False
+            admin.user.save()
+            return Response({"details":"Administrador desactivado"},200)
+        except Exception as e:
+            return Response({"details":"Error al desactivar administrador"},400)
+
+class TotalUsuarios(generics.CreateAPIView):
+    #Primero verificamos que el usuario esté autenticado para acceder a esta vista
+    permission_classes = (permissions.IsAuthenticated,)
+    def get(self, request, *args, **kwargs):
+        total_admins = Administradores.objects.filter(user__is_active=1).count()
+        total_maestros = Maestros.objects.filter(user__is_active=1).count()
+        total_alumnos = Alumnos.objects.filter(user__is_active=1).count()
+        #En caso de error, se puede manejar con un bloque try-except para capturar cualquier excepción que pueda ocurrir durante la consulta a la base de datos y devolver una respuesta adecuada.
+        try:
+            return Response({
+                "total_admins": total_admins,
+                "total_maestros": total_maestros,
+                "total_alumnos": total_alumnos
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"details":"Error al obtener el total de usuarios"},400)

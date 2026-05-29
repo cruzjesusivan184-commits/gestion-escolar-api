@@ -33,7 +33,48 @@ class MaestrosView(generics.CreateAPIView):
         if self.request.method in ['GET', 'PUT', 'DELETE']:
             return [permissions.IsAuthenticated()]
         return []  # POST no requiere autenticación
+
+    #Eliminar un maestro específico por su ID
+    @transaction.atomic
+    def delete(self, request, *args, **kwargs):
+        maestro = Maestros.objects.filter(id=request.query_params.get("id"), user__is_active=1).first()
+        if not maestro:
+            return Response({"message": "Maestro no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        user = maestro.user
+        maestro.delete()
+        user.delete()
+        return Response({"message": "Maestro eliminado correctamente"}, status=status.HTTP_200_OK)
     
+   #Obtener un maestro específico por su ID
+    def get(self, request, *args, **kwargs):
+        maestro = Maestros.objects.filter(id=request.GET.get("id"), user__is_active=1).first()
+        if not maestro:
+            return Response({"message": "Maestro no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = MaestrosSerializer(maestro)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+   # Actualizar datos del maestro
+    @transaction.atomic
+    def put(self, request, *args, **kwargs):
+        maestro = Maestros.objects.filter(id=request.data["id"], user__is_active=1).first()
+        if not maestro:
+            return Response({"message": "Maestro no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        user = maestro.user
+        user.first_name = request.data["first_name"]
+        user.last_name = request.data["last_name"]
+        user.save()
+        maestro.id_trabajador = request.data["id_trabajador"]
+        maestro.fecha_nacimiento = request.data["fecha_nacimiento"]
+        maestro.telefono = request.data["telefono"]
+        maestro.rfc = request.data["rfc"].upper()
+        maestro.cubiculo = request.data["cubiculo"]
+        maestro.area_investigacion = request.data["area_investigacion"]
+        maestro.campus = request.data["campus"]
+        maestro.sueldo_estimado = request.data["sueldo_estimado"]
+        maestro.materias_array = json.dumps(request.data["materias_array"])
+        maestro.save()
+        return Response({"message": "Maestro actualizado correctamente"}, status=status.HTTP_200_OK)
+
     #Registrar nuevo usuario maestro
     @transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -67,7 +108,9 @@ class MaestrosView(generics.CreateAPIView):
                                             rfc= request.data["rfc"].upper(),
                                             cubiculo= request.data["cubiculo"],
                                             area_investigacion= request.data["area_investigacion"],
-                                            materias_array = json.dumps(request.data["materias_array"]))
+                                            materias_array = json.dumps(request.data["materias_array"]),
+                                            campus= request.data["campus"],
+                                            sueldo_estimado= request.data["sueldo_estimado"])
             maestro.save()
             return Response({"Maestro creado con ID= ": maestro.id }, 201)
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
