@@ -1,3 +1,21 @@
+"""
+views/maestros.py
+----------------------------------------------------------
+Vistas para la gestión de maestros: CRUD completo.
+
+Particularidad de materias_array:
+    Las materias que imparte un maestro se almacenan como un array JSON
+    serializado en un TextField de la BD (json.dumps al guardar, json.loads al leer).
+    En MaestrosAll.get() se deserializa materias_array de string a lista Python
+    antes de enviar la respuesta, para que el frontend reciba un array real y no
+    un string con corchetes.
+
+Mismos patrones que alumnos.py:
+    - MaestrosAll: GET /lista-maestros/ (lista paginada para MaestrosScreen)
+    - MaestrosView: GET/POST/PUT/DELETE /maestros/ (CRUD de un maestro)
+    - @transaction.atomic en POST y PUT para atomicidad BD.
+    - request.query_params para DELETE (id en URL), request.data para PUT (id en body).
+"""
 from django.db.models import *
 from django.db import transaction
 from gestion_escolar_api.models import Administradores, Maestros
@@ -11,7 +29,17 @@ from rest_framework.response import Response
 from django.contrib.auth.models import Group
 import json
 
+
 class MaestrosAll(generics.CreateAPIView):
+    """
+    Endpoint: GET /lista-maestros/
+    Método HTTP: GET
+    Autenticación: Requerida (IsAuthenticated)
+    Modelo BD: Maestros
+
+    Retorna: lista JSON de maestros activos con materias_array deserializado.
+    Consumido por: MaestrosScreen.obtenerMaestros() en el frontend Angular.
+    """
     #Obtener todos los maestros
     # Necesita permisos de autenticación de usuario para poder acceder a la petición
     permission_classes = (permissions.IsAuthenticated,)
@@ -27,6 +55,12 @@ class MaestrosAll(generics.CreateAPIView):
         return Response(lista, 200)
 
 class MaestrosView(generics.CreateAPIView):
+    """
+    Endpoint: /maestros/
+    Métodos HTTP: GET (?id=X), POST (crear), PUT (actualizar), DELETE (?id=X)
+    Autenticación: Requerida para GET, PUT, DELETE. POST es público.
+    Modelo BD: Maestros (+ User via ForeignKey)
+    """
     # Permisos por método (sobrescribe el comportamiento default)
     # Verifica que el usuario esté autenticado para las peticiones GET, PUT y DELETE
     def get_permissions(self):

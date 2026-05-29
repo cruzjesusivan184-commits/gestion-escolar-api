@@ -1,3 +1,22 @@
+"""
+views/alumnos.py
+----------------------------------------------------------
+Vistas para la gestión de alumnos: CRUD completo.
+
+Separación de responsabilidades:
+    AlumnosView: maneja operaciones sobre UN alumno específico (GET/POST/PUT/DELETE).
+    AlumnosAll: maneja la operación de listar TODOS los alumnos (GET lista).
+
+request.query_params vs request.data:
+    - request.query_params.get("id"): parámetro de URL (?id=5). Usado en DELETE y GET.
+    - request.data["id"]: cuerpo JSON del request. Usado en PUT.
+    Esta diferencia es importante: si el profesor pregunta "¿cómo reciben el id?",
+    la respuesta depende del método HTTP.
+
+@transaction.atomic en POST:
+    Crea el User y el perfil Alumnos en una sola transacción. Si falla cualquier
+    paso, ambos se deshacen. Sin esto, podría crearse un User sin perfil Alumnos.
+"""
 from django.db.models import *
 from django.db import transaction
 from gestion_escolar_api.models import Administradores, Maestros
@@ -12,7 +31,14 @@ from django.contrib.auth.models import Group
 from django.shortcuts import get_object_or_404
 import json
 
+
 class AlumnosView(generics.CreateAPIView):
+    """
+    Endpoint: /alumnos/
+    Métodos HTTP: GET (?id=X), POST (crear), PUT (actualizar), DELETE (?id=X)
+    Autenticación: Requerida para GET, PUT, DELETE. POST es público.
+    Modelo BD: Alumnos (+ User via ForeignKey)
+    """
     # Permisos por método (sobrescribe el comportamiento default)
     # Verifica que el usuario esté autenticado para las peticiones GET, PUT y DELETE
     def get_permissions(self):
@@ -20,7 +46,9 @@ class AlumnosView(generics.CreateAPIView):
             return [permissions.IsAuthenticated()]
         return []  # POST no requiere autenticación
 
-    #Eliminar un alumno específico por su ID
+    # DELETE /alumnos/?id=X — Eliminación FÍSICA del alumno y su User asociado.
+    # Se elimina primero el perfil y luego el User para respetar integridad referencial.
+    # request.query_params.get("id"): el id viene como parámetro en la URL, no en el body.
     @transaction.atomic
     def delete(self, request, *args, **kwargs):
         alumno = Alumnos.objects.filter(id=request.query_params.get("id"), user__is_active=1).first()
@@ -112,8 +140,18 @@ class AlumnosView(generics.CreateAPIView):
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AlumnosAll(generics.CreateAPIView):
-    # Obtener todos los alumnos registrados
-    # Necesita permisos de autenticación de usuario para poder acceder a la petición
+    """
+    Endpoint: GET /lista-alumnos/
+    Método HTTP: GET
+    Autenticación: Requerida (IsAuthenticated)
+    Modelo BD: Alumnos
+
+    Retorna: lista JSON de todos los alumnos activos, ordenados por id.
+    Consumido por: AlumnosScreen.obtenerAlumnos() en el frontend Angular.
+    """
+    # permission_classes = (permissions.IsAuthenticated,):
+    # Solo usuarios autenticados (con token válido) pueden ver la lista de alumnos.
+    # Si no hay token o es inválido, DRF retorna 401 Unauthorized automáticamente.
     permission_classes = (permissions.IsAuthenticated,)
     def get(self, request, *args, **kwargs):
         alumnos = Alumnos.objects.filter(user__is_active=1).order_by("id")
